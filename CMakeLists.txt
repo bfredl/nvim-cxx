@@ -14,3 +14,4 @@ add_executable(test_cxx src/test.cpp)
 target_link_libraries(test_cxx ${Boost_LIBRARIES})
 # msgpack.hpp is "include only", no linking
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS 1)
