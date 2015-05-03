@@ -8,3 +8,11 @@ build/Makefile: CMakeLists.txt
 .PHONY: build
 build: build/Makefile
 	$(MAKE) -C build
+
+.PHONY: clean
+clean:
+	rm -r build/
+
+.PHONY: run
+run: build
+	./build/test_cxx
