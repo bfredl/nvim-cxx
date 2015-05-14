@@ -10,7 +10,9 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_path(MSGPACK_INCLUDE_DIR msgpack.hpp)
 include_directories(${MSGPACK_INCLUDE_DIR})
 
+include_directories(${CMAKE_SOURCE_DIR}/include)
 add_executable(test_cxx src/test.cpp)
+
 target_link_libraries(test_cxx ${Boost_LIBRARIES})
 # msgpack.hpp is "include only", no linking
 
