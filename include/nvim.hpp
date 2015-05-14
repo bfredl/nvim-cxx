@@ -8,6 +8,7 @@
 
 using std::cerr;
 using std::endl;
+using std::move;
 namespace asio = boost::asio;
 using asio::local::stream_protocol;
 
@@ -64,7 +65,7 @@ public:
         uint64_t myid = sid++;
         std::stringstream sb;
         msgpack::packer<decltype(sb)> p(sb);
-        waiting.emplace(myid, handler);
+        waiting.emplace(myid, move(handler));
         p.pack_array(4);
         p.pack_int(REQUEST).pack(myid).pack(name);
         // TODO: we might need to template this to make the handling of typed arrays safe.
@@ -72,7 +73,6 @@ public:
         asio::write(s, asio::buffer(sb.str()));
     }
 
-    void eval(std::string code, response_handler &&handler) { request_async("vim_eval", std::move(handler), code); };
 
     bool connect(const std::string address) {
         s.connect(stream_protocol::endpoint(address));
@@ -91,5 +91,13 @@ public:
 };
 
 class AsyncNvimClient : public BaseAsyncNvimClient<std::function<void(msgpack::object &)>, int> {
+    template<class T> using handler = std::function<void(T)>;
+    template<class T, typename... Args> void req(const char* name, handler<T> &&handler, Args... args) {
+        request_async(name, [handler](msgpack::object &o) { handler(o.as<T>()); }, args...);
+    }
+
+public:
+    void eval(std::string code, handler<msgpack::object &> &&handler) { request_async("vim_eval", move(handler), code); };
+    void strwidth(std::string code, handler<int64_t> &&handler) { req("vim_strwidth", move(handler), code); };
 };
 

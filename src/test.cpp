@@ -1,11 +1,12 @@
-#include "nvim.hpp"
+#include "../include/nvim.hpp"
 
 int main() {
     AsyncNvimClient nv;
     char* addr = getenv("NVIM_LISTEN_ADDRESS");
     if(!addr) return 0;
     nv.connect(addr);
-    nv.request_async("vim_get_api_info", [](msgpack::object& res) {cerr << res << endl;} );
+    //nv.request_async("vim_get_api_info", [](msgpack::object& res) {cerr << res << endl;} );
+    nv.strwidth("bred sträng", [](int64_t res) {cerr << res << endl;});
     nv.eval("2+2", [&](msgpack::object& res) {
         cerr << res << endl;
         nv.request_async("vim_get_current_line", [&](msgpack::object& res) {cerr << res << endl; nv.stop();} );
