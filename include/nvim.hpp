@@ -1,4 +1,3 @@
-
 #include <iostream>
 #include <iomanip>
 #include <sstream>
@@ -90,14 +89,46 @@ public:
 
 };
 
+struct NvimObject {
+    int8_t tag;
+    uint64_t id;
+    NvimObject( msgpack::object & o) {
+        assert(o.type == msgpack::type::EXT);
+        auto & ext = o.via.ext;
+        tag = ext.type();
+        id = 0;
+        for (size_t i = 0; i < ext.size-1; i++) {
+            id *= 256;
+            id += ((unsigned char*)ext.data())[i];
+        }
+    }
+
+};
+
 class AsyncNvimClient : public BaseAsyncNvimClient<std::function<void(msgpack::object &)>, int> {
     template<class T> using handler = std::function<void(T)>;
-    template<class T, typename... Args> void req(const char* name, handler<T> &&handler, Args... args) {
-        request_async(name, [handler](msgpack::object &o) { handler(o.as<T>()); }, args...);
+    template<class T, typename... Args> void request(const char* name, handler<T> &&handler, Args... args) {
+        request_async(name, convert_return(move(handler)), args...);
+    }
+
+    template<class T> handler<msgpack::object&> convert_return(handler<T> && handler) {
+        return [handler](msgpack::object &o) { handler(o.as<T>()); };
+    }
+
+    handler<msgpack::object&> && convert_return(handler<msgpack::object&> && handler) {
+        return move(handler);
+    }
+
+    //handler<msgpack::object&> convert_return(handler<NvimObject> && handler) {
+    //    return [handler](msgpack::object &o) { handler(NvimObject(o)); };
+    //}
+
+    template<typename... Args> void request(const char* name, handler<msgpack::object&> &&handler, Args... args) {
+        request_async(name, move(handler), args...);
     }
 
 public:
-    void eval(std::string code, handler<msgpack::object &> &&handler) { request_async("vim_eval", move(handler), code); };
-    void strwidth(std::string code, handler<int64_t> &&handler) { req("vim_strwidth", move(handler), code); };
+    void eval(std::string code, handler<msgpack::object &> &&handler) { request("vim_eval", move(handler), code); };
+    void strwidth(std::string code, handler<int64_t> &&handler) { request("vim_strwidth", move(handler), code); };
 };
 
