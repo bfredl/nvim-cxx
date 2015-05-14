@@ -50,21 +50,28 @@ template<typename response_handler, typename event_handler> class BaseAsyncNvimC
         if (msg[0].as<int>() == RESPONSE) {
             uint64_t myid = msg[1].as<uint64_t>();
             auto it = waiting.find(myid);
+            if (msg[2].type != msgpack::type::NIL) {
+                cerr << msg[2] << endl;
+            }
             it->second(msg[3]); //TODO: error
             waiting.erase(it);
         }
     }
 
 public:
-    template<typename... Args> void request_async(std::string name, std::tuple<Args...> args, response_handler &&handler) {
+    template<typename... Args> void request_async(const char* name, response_handler &&handler, Args... args) {
         uint64_t myid = sid++;
         std::stringstream sb;
+        msgpack::packer<decltype(sb)> p(sb);
         waiting.emplace(myid, handler);
-        std::tuple<int, int, std::string, std::tuple<Args...>> t(REQUEST, myid, name, args);
-        msgpack::pack(sb,t);
+        p.pack_array(4);
+        p.pack_int(REQUEST).pack(myid).pack(name);
+        // TODO: we might need to template this to make the handling of typed arrays safe.
+        p.pack(std::tuple<Args...>(args...));
         asio::write(s, asio::buffer(sb.str()));
     }
 
+    void eval(std::string code, response_handler &&handler) { request_async("vim_eval", std::move(handler), code); };
 
     bool connect(const std::string address) {
         s.connect(stream_protocol::endpoint(address));
@@ -90,8 +97,11 @@ int main() {
     char* addr = getenv("NVIM_LISTEN_ADDRESS");
     if(!addr) return 0;
     nv.connect(addr);
-    nv.request_async("vim_get_api_info", {}, [](msgpack::object& res) {cerr << res << endl;} );
-    nv.request_async("vim_get_current_line", {}, [&](msgpack::object& res) {cerr << res << endl; nv.stop();} );
+    nv.request_async("vim_get_api_info", [](msgpack::object& res) {cerr << res << endl;} );
+    nv.eval("2+2", [&](msgpack::object& res) {
+        cerr << res << endl;
+        nv.request_async("vim_get_current_line", [&](msgpack::object& res) {cerr << res << endl; nv.stop();} );
+    });
     nv.run();
 }
 
