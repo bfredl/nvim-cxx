@@ -1,7 +1,7 @@
 #include "../include/nvim.hpp"
 
 int main() {
-    AsyncNvimClient nv;
+    NvimApiClient nv;
     char* addr = getenv("NVIM_LISTEN_ADDRESS");
     if(!addr) return 0;
     nv.connect(addr);
@@ -18,5 +18,6 @@ int main() {
 }
 
 /*
-noremap <Plug>ch:un :up<cr><c-w><c-w>imake run<cr><c-\><c-n><c-w><c-w>
+new | let g:bterm = termopen(&shell)
+noremap <Plug>ch:un :up<cr>:call jobsend(g:bterm, "make run\n")<cr>
 */

@@ -17,7 +17,7 @@ enum {
     NOTIFY = 2
 };
 
-template<typename response_handler, typename event_handler> class BaseAsyncNvimClient {
+template<typename response_handler, typename event_handler> class BaseNvimClient {
     asio::io_service io;
     // TODO: virtualize the socket, to allow multible connection types
     stream_protocol::socket s{io};
@@ -29,7 +29,7 @@ template<typename response_handler, typename event_handler> class BaseAsyncNvimC
     void read_more() {
         up.reserve_buffer(32*1024ul);
         s.async_read_some(asio::buffer(up.buffer(), up.buffer_capacity()),
-                boost::bind(&BaseAsyncNvimClient::handle_read, this, _1, _2));
+                boost::bind(&BaseNvimClient::handle_read, this, _1, _2));
     }
 
     void handle_read(const boost::system::error_code& error, size_t read) {
@@ -105,30 +105,52 @@ struct NvimObject {
 
 };
 
-class AsyncNvimClient : public BaseAsyncNvimClient<std::function<void(msgpack::object &)>, int> {
-    template<class T> using handler = std::function<void(T)>;
-    template<class T, typename... Args> void request(const char* name, handler<T> &&handler, Args... args) {
-        request_async(name, convert_return(move(handler)), args...);
-    }
+using objhandler = std::function<void(msgpack::object&)>;
 
-    template<class T> handler<msgpack::object&> convert_return(handler<T> && handler) {
+template<class T> struct _handler_t {
+    using handler_t = std::function<void(T)>;
+
+    static objhandler convert_return(handler_t && handler) {
         return [handler](msgpack::object &o) { handler(o.as<T>()); };
     }
-
-    handler<msgpack::object&> && convert_return(handler<msgpack::object&> && handler) {
-        return move(handler);
-    }
-
-    //handler<msgpack::object&> convert_return(handler<NvimObject> && handler) {
-    //    return [handler](msgpack::object &o) { handler(NvimObject(o)); };
-    //}
-
-    template<typename... Args> void request(const char* name, handler<msgpack::object&> &&handler, Args... args) {
-        request_async(name, move(handler), args...);
-    }
-
-public:
-    void eval(std::string code, handler<msgpack::object &> &&handler) { request("vim_eval", move(handler), code); };
-    void strwidth(std::string code, handler<int64_t> &&handler) { request("vim_strwidth", move(handler), code); };
 };
 
+template<> struct _handler_t<void> {
+    // std::function cannot <void(void)>
+    using handler_t = std::function<void()>;
+    static objhandler convert_return(handler_t && handler) {
+        return [handler](msgpack::object &o) { (void)o; handler(); };
+    }
+};
+
+// TODO: probably should replace this with a NvimObject ADT
+template<> struct _handler_t<msgpack::object&> {
+    using handler_t = objhandler;
+    static objhandler convert_return(handler_t && handler) {
+        return [handler](msgpack::object &o) { handler(o); };
+    }
+};
+
+class HandlerNvimClient : public BaseNvimClient<std::function<void(msgpack::object &)>, int> {
+protected:
+    template<class T> using handler_t = typename _handler_t<T>::handler_t;
+
+    template<class T, typename... Args> void request(const char* name, handler_t<T> &&handler, Args... args) {
+        request_async(name, _handler_t<T>::convert_return(move(handler)), args...);
+    }
+
+};
+
+/*
+class NvimApiClient : public HandlerNvimClient {
+public:
+void eval(std::string a_str, handler_t<msgpack::object&> && handler)
+    { request<msgpack::object&>("vim_eval", move(handler), a_str); }
+
+void strwidth(std::string a_str, handler_t<int64_t> && handler)
+    { request<int64_t>("vim_strwidth", move(handler), a_str); }
+
+};
+*/
+
+#include "api_gen.hpp"

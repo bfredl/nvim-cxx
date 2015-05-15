@@ -10,8 +10,15 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_path(MSGPACK_INCLUDE_DIR msgpack.hpp)
 include_directories(${MSGPACK_INCLUDE_DIR})
 
+add_custom_command (
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/api_gen.hpp
+  DEPENDS ${CMAKE_SOURCE_DIR}/api_gen.py
+  COMMAND python ${CMAKE_SOURCE_DIR}/api_gen.py ${CMAKE_CURRENT_BINARY_DIR}/api_gen.hpp
+)
+include_directories( ${CMAKE_CURRENT_BINARY_DIR} )
+
 include_directories(${CMAKE_SOURCE_DIR}/include)
-add_executable(test_cxx src/test.cpp)
+add_executable(test_cxx src/test.cpp ${CMAKE_CURRENT_BINARY_DIR}/api_gen.hpp)
 
 target_link_libraries(test_cxx ${Boost_LIBRARIES})
 # msgpack.hpp is "include only", no linking
