@@ -1,6 +1,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <cstdlib>
 #include <msgpack.hpp>
 #include <boost/asio.hpp>
 #include <boost/bind.hpp>
@@ -52,7 +53,7 @@ template<typename response_handler, typename event_handler> class BaseNvimClient
             uint64_t myid = msg[1].as<uint64_t>();
             auto it = waiting.find(myid);
             if (msg[2].type != msgpack::type::NIL) {
-                cerr << msg[2] << endl;
+                //cerr << msg[2] << endl;
             }
             it->second(msg[3]); //TODO: error
             waiting.erase(it);
@@ -69,7 +70,7 @@ public:
         p.pack_int(REQUEST).pack(myid).pack(name);
         // TODO: we might need to template this to make the handling of typed arrays safe.
         p.pack(std::tuple<Args...>(args...));
-        cerr << sb.str();
+        //cerr << sb.str();
         asio::write(s, asio::buffer(sb.str()));
     }
 
@@ -93,28 +94,29 @@ public:
 // unityped objects for now
 struct NvimObject {
     int8_t tag;
-    uint64_t id;
+    //uint64_t id;
+    int8_t len;
+    char data[9];
     NvimObject( msgpack::object & o) {
         assert(o.type == msgpack::type::EXT);
         auto & ext = o.via.ext;
         tag = ext.type();
-        id = 0;
-        for (size_t i = 0; i < ext.size; i++) {
-            id *= 256;
-            id += ((unsigned char*)ext.data())[i];
-        }
+        // TODO: unpack the nested msgpack number
+        len = (int8_t)ext.size;
+        assert(len <= 9);
+        memcpy(data, ext.data(), len);
     }
 
     template <typename Packer>
     void msgpack_pack(Packer& pk) const {
-        pk.pack_ext(sizeof id, tag);
-        pk.pack_ext_body((char *)&id, sizeof id);
+        pk.pack_ext(len, tag);
+        pk.pack_ext_body(data, len);
     }
 };
 
 std::ostream& operator<<(std::ostream& os, const NvimObject& o)
 {
-    os << "NvimObject(" << (int)o.tag << ", " << o.id << ")";
+    os << "NvimObject(" << (int)o.tag << ")";
     return os;
 }
 
