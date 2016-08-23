@@ -22,6 +22,9 @@ typemap = {
     'void': 'void'
 }
 
+for t,d in types.items():
+    typemap[t] = "NvimObject"
+
 def dump_function(f):
     arg_list = []
     template_list = []
@@ -53,8 +56,8 @@ else:
 f.write("class NvimApiClient : public HandlerNvimClient {\n");
 f.write("public:\n");
 
-f.write(dump_function(funs[5])+"\n")
-f.write(dump_function(funs[6])+"\n")
+for fun in funs:
+    f.write(dump_function(fun)+"\n")
 
 f.write("};\n")
 f.close()

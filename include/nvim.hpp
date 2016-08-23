@@ -69,6 +69,7 @@ public:
         p.pack_int(REQUEST).pack(myid).pack(name);
         // TODO: we might need to template this to make the handling of typed arrays safe.
         p.pack(std::tuple<Args...>(args...));
+        cerr << sb.str();
         asio::write(s, asio::buffer(sb.str()));
     }
 
@@ -89,6 +90,7 @@ public:
 
 };
 
+// unityped objects for now
 struct NvimObject {
     int8_t tag;
     uint64_t id;
@@ -97,13 +99,24 @@ struct NvimObject {
         auto & ext = o.via.ext;
         tag = ext.type();
         id = 0;
-        for (size_t i = 0; i < ext.size-1; i++) {
+        for (size_t i = 0; i < ext.size; i++) {
             id *= 256;
             id += ((unsigned char*)ext.data())[i];
         }
     }
 
+    template <typename Packer>
+    void msgpack_pack(Packer& pk) const {
+        pk.pack_ext(sizeof id, tag);
+        pk.pack_ext_body((char *)&id, sizeof id);
+    }
 };
+
+std::ostream& operator<<(std::ostream& os, const NvimObject& o)
+{
+    os << "NvimObject(" << (int)o.tag << ", " << o.id << ")";
+    return os;
+}
 
 using objhandler = std::function<void(msgpack::object&)>;
 
@@ -128,6 +141,13 @@ template<> struct _handler_t<msgpack::object&> {
     using handler_t = objhandler;
     static objhandler convert_return(handler_t && handler) {
         return [handler](msgpack::object &o) { handler(o); };
+    }
+};
+
+template<> struct _handler_t<NvimObject> {
+    using handler_t = std::function<void(NvimObject)>;
+    static objhandler convert_return(handler_t && handler) {
+        return [handler](msgpack::object &o) { handler(NvimObject(o)); };
     }
 };
 
